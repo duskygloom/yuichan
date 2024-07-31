@@ -2,3 +2,5 @@ secret.json
 cli.py
 assets_original/
 __pycache__/
+downloads/*
+test.ipynb
