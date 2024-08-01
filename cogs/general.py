@@ -16,7 +16,7 @@ class General(commands.Cog):
 
     @commands.command(
         name="join",
-        description="Yui joins your voice channel."
+        brief="Yui joins your voice channel."
     )
     async def join(self, ctx: commands.Context, voice_channel: Optional[VoiceChannel]):
         '''
@@ -51,7 +51,7 @@ class General(commands.Cog):
 
     @commands.command(
         name="leave",
-        description="Yui leaves your voice channel."
+        brief="Yui leaves your voice channel."
     )
     async def leave(self, ctx: commands.Context):
         '''

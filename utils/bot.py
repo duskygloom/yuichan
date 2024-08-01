@@ -65,8 +65,8 @@ class VoiceBot(commands.Bot):
         vc.cleanup()
         self.voice_protocol.pop(guild, None)
 
-    def create_player(self, guild: Guild):
-        client = self.get_voice_client(guild)
+    async def create_player(self, guild: Guild):
+        client = await self.get_voice_client(guild)
         if not client:
             return
         self.players[guild] = Player(client)

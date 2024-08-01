@@ -5,8 +5,11 @@ from discord.ext import commands
 
 from utils import messages
 from utils.bot import *
+from utils.logger import *
 from utils.player import *
 from utils.secret import *
+
+logger = get_logger(__name__)
 
 
 class Developer(commands.Cog):
@@ -24,7 +27,7 @@ class Developer(commands.Cog):
 
     @commands.command(
         name="shutdown",
-        description="Yui shuts down."
+        brief="Yui shuts down."
     )
     async def shutdown(self, ctx: commands.Context):
         '''
@@ -40,13 +43,23 @@ class Developer(commands.Cog):
 
     @commands.command(
         name="execute",
-        description="Executes the CLI routine."
+        brief="Executes the CLI routine."
     )
     async def execute(self, ctx: commands.Context, *args):
         if not (await Developer.check_developer(ctx)):
             return
         importlib.reload(cli)
         await cli.routine(ctx, *args)
+
+    @commands.command(
+        name="reload",
+        brief="Reloads extensions."
+    )
+    async def reload(self, ctx: commands.Context):
+        secret = load_secret()
+        for cog in secret["cogs"]:
+            await self.bot.reload_extension(cog)
+            logger.info(f"Reloaded extension: {cog}")
 
 
 async def setup(bot: VoiceBot):

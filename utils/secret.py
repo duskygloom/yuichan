@@ -1,6 +1,6 @@
 import json
 
-from typing import TypedDict, Literal, Any
+from typing import TypedDict, Literal
 
 secret_file = "secret.json"
 
@@ -15,13 +15,13 @@ class secret_t(TypedDict):
     cogs: list[str]
     mode: Literal["RELEASE", "DEBUG"]
     developers: list[str]
-    ffmpeg_options: dict[Literal["before_options", "options"], str]
     quality: str
     extension: str
     download_path: str
     max_song_duration: int
     max_download_size: int
     max_results: int
+    emojis: dict[Literal["search", "download"], str]
 
 
 def load_secret() -> secret_t:

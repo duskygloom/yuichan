@@ -25,7 +25,7 @@ class Song:
         return self.id
 
     @staticmethod
-    def from_info(info: dict, complete: bool = False):
+    def from_info(info: dict, complete: bool = False) -> "Song":
         song = Song()
         song.id = info.get("id")
         song.url = info.get("url") or info("original_url")
@@ -36,6 +36,12 @@ class Song:
         song.path = os.path.join(secret["download_path"], f"{song.id}.{secret['extension']}")
         if complete:
             song.source = get_source_url(info)
+        return song
+    
+    @staticmethod
+    def from_path(path: str) -> "Song":
+        song = Song()
+        song.path = path
         return song
     
 

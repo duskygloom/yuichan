@@ -80,11 +80,17 @@ def search_songs(query: str) -> list[Song]:
 
 
 def download_song(song: Song) -> bool:
+    # if song is None
+    if Song is None:
+        return False
+    # if song duration is too big
     if song.duration > secret["max_song_duration"]:
         return False
-    elif os.path.isfile(os.path.join(secret["download_path"], f"{song.id}.{secret['extension']}")):
-        logger.warning(f"Already downloaded: {song.id}.{secret['extension']}")
+    # if song is already downloaded
+    elif os.path.isfile(song.path):
+        logger.warning(f"Already downloaded: {song.path}")
         return True
+    # download
     YoutubeDL(ytdl_options).download(song.url)
     return True
 
