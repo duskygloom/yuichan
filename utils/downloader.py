@@ -1,13 +1,12 @@
 import os
 
 from yt_dlp import YoutubeDL
-from functools import partial
-from discord.ext import commands
+# from functools import partial
+# from discord.ext import commands
 
 from utils.song import *
 from utils.logger import *
 from utils.secret import *
-
 
 secret = load_secret()
 logger = get_logger(__name__)

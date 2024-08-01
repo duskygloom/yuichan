@@ -56,10 +56,13 @@ class Developer(commands.Cog):
         brief="Reloads extensions."
     )
     async def reload(self, ctx: commands.Context):
+        if not (await Developer.check_developer(ctx)):
+            return
         secret = load_secret()
         for cog in secret["cogs"]:
             await self.bot.reload_extension(cog)
             logger.info(f"Reloaded extension: {cog}")
+        await ctx.reply("Reloaded extensions.")
 
 
 async def setup(bot: VoiceBot):
