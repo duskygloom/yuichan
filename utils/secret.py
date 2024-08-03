@@ -22,6 +22,7 @@ class secret_t(TypedDict):
     max_download_size: int
     max_results: int
     emojis: dict[Literal["search", "download"], str]
+    quiet_ytdl: bool
 
 
 def load_secret() -> secret_t:

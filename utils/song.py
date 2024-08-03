@@ -6,42 +6,77 @@ secret = load_secret()
 
 
 class Song:
-    id: str = ""
-    url: str = ""
-    path: str = ""
-    title: str = ""
-    artist: str = ""
-    duration: int = 0
-    thumbnail: str = ""
+    id: str
+    url: str
+    title: str
+    artist: str
+    duration: int
+    _info: dict
+    _path: str
+    _thumbnail: str
 
     def duration_str(self) -> str:
-        text = f"{int(self.duration // 60)} mins {int(self.duration % 60)} secs"
+        duration = 0
+        if hasattr(self, "duration"):
+            duration = self.duration
+        text = f"{int(duration // 60)} minutes {int(duration % 60)} seconds"
         return text
 
     def exists(self) -> bool:
         return os.path.exists(self.path)
     
+    @property
+    def path(self):
+        if hasattr(self, "_path"):
+            return self._path
+        return os.join(secret["download_path"], f"{self.id}.{secret['extension']}")
+    
+    @path.setter
+    def path(self, filepath: str):
+        self._path = filepath
+    
+    @property
+    def thumbnail(self):
+        if hasattr(self, "_thumbnail"):
+            return self._thumbnail
+        return f"https://i.ytimg.com/vi/{self.id}/hqdefault.jpg"
+    
+    @thumbnail.setter
+    def thumbnail(self, fileurl: str):
+        self._thumbnail = fileurl
+    
     def __str__(self) -> str:
-        return self.id
+        secret = load_secret()
+        if not hasattr(self, "title"):
+            return f"**{self.path.lstrip(secret['download_path'])}**"
+        elif not hasattr(self, "artist"):
+            return f"**{self.title}**"
+        return f"**{self.title}** [*{self.artist}*]"
 
     @staticmethod
-    def from_info(info: dict, complete: bool = False) -> "Song":
+    def from_info(info: dict) -> "Song":
         song = Song()
-        song.id = info.get("id")
-        song.url = info.get("url") or info("original_url")
-        song.title = info.get("title")
-        song.duration = info.get("duration") or 0
-        song.artist = info.get("channel")
-        song.thumbnail = info.get("thumbnails")[-1].get("url")
-        song.path = os.path.join(secret["download_path"], f"{song.id}.{secret['extension']}")
-        if complete:
-            song.source = get_source_url(info)
+        song.id = info["id"]
+        song.url = info["original_url"]
+        song.title = info["title"]
+        song.artist = info["uploader"]
+        song.duration = info["duration"]
         return song
     
     @staticmethod
-    def from_path(path: str) -> "Song":
+    def from_entry(entry: dict) -> "Song":
         song = Song()
-        song.path = path
+        song.id = entry["id"]
+        song.url = entry["url"]
+        song.title = entry["title"]
+        song.artist = entry["uploader"]
+        song.duration = entry["duration"]
+        return song
+    
+    @staticmethod
+    def from_path(filepath: str) -> "Song":
+        song = Song()
+        song.path = filepath
         return song
     
 

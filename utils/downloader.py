@@ -1,24 +1,34 @@
 import os
+import re
 
+from enum import Enum
 from yt_dlp import YoutubeDL
-# from functools import partial
-# from discord.ext import commands
+from yt_dlp.utils import UnsupportedError
 
 from utils.song import *
 from utils.logger import *
 from utils.secret import *
 
-secret = load_secret()
 logger = get_logger(__name__)
 
-ytdl_options = {
-    "format": f"{secret['extension']}/{secret['quality']}",
-    "outtmpl": f"{secret['download_path']}/%(id)s.{secret['extension']}",
-    "noplaylist": True
+quiet_options = {
+    "quiet": True,
+    "no_warnings": True
 }
 
 
+def get_download_options() -> dict:
+    secret = load_secret()
+    options = {
+        "format": f"{secret['extension']}/{secret['quality']}",
+        "outtmpl": f"{secret['download_path']}/%(id)s.{secret['extension']}",
+        "noplaylist": True
+    }
+    return options
+
+
 def clear_downloads():
+    secret = load_secret()
     total_size = 0
     for file in os.listdir(secret["download_path"]):
         path = os.path.join(secret["download_path"], file)
@@ -32,53 +42,96 @@ def clear_downloads():
                 logger.warning(f"Deleted: {path}")
 
 
-# async def get_songs(ctx: commands.Context, query: str) -> list[Song]:
-#     search_function = partial(search, query)
-#     await ctx.message.add_reaction('⏳')
-#     search_results: list[Song] = await ctx.bot.loop.run_in_executor(None, search_function)
-#     await ctx.message.remove_reaction('⏳', ctx.bot.user)
-#     return search_results
+class URLtype(Enum):
+    YT_WATCH = "youtube video"
+    YT_PLAYLIST = "youtube playlist"
+    OTHER = "other"
+    NOT_URL = "not a url"
 
 
-# async def download_song(ctx: commands.Context, song: Song) -> bool:
-#     await ctx.message.add_reaction('⬇️')
-#     status = download(song)
-#     await ctx.message.remove_reaction('⬇️', ctx.bot.user)
-#     return status
-
-
-def search_songs(query: str) -> list[Song]:
-    max_results = secret["max_results"]
-    results = []
+def analyze_url(url: str) -> URLtype:
+    url_regex = "http[s]://+"
+    if re.search(re.compile(url_regex), url) == None:
+        return URLtype.NOT_URL
     try:
-        # assuming query is a youtube link
-        info = YoutubeDL().extract_info(
-            url=query, 
-            download=False,
-            process=False
-        )
-        if info.get("webpage_url_basename") == "playlist":
-            for entry in info.get("entries"):
-                results.append(Song.from_info(entry))
-        else:
-            results.append(Song.from_info(info, True))
-    except Exception as e:
-        logger.warning(e)
-        # error means the youtube link was not found
-        matches = YoutubeDL().extract_info(
-            url=f"ytsearch{max_results}:{query}", 
-            download=False, 
-            process=False
-        )
-        for match in matches.get("entries"):
+        logger.info("Analyzing URL...")
+        info = YoutubeDL(quiet_options).extract_info(url, download=False, process=False)
+        logger.info("Done.")
+        basename = info.get("webpage_url_basename")
+        if basename == "watch":
+            return URLtype.YT_WATCH
+        elif basename == "playlist":
+            return URLtype.YT_PLAYLIST
+        return URLtype.OTHER
+    except UnsupportedError:
+        logger.info("Done.")
+        return URLtype.OTHER
+
+
+def get_songs_from_youtube(url: str) -> list[Song]:
+    '''
+    Note
+    ----
+    Make sure to handle error. This function intentionally does not take
+    care of key errors.
+    '''
+    secret = load_secret()
+    options = quiet_options if secret["quiet_ytdl"] else None
+    logger.info("Getting song from youtube...")
+    info = YoutubeDL(options).extract_info(url, download=False, process=False)
+    logger.info("Done.")
+    songs = []
+    basename = info.get("webpage_url_basename")
+    if basename == "watch":
+        songs.append(Song.from_info(info))
+    elif basename == "playlist":
+        entries = info["entries"]
+        while True:
             try:
-                results.append(Song.from_info(match))
-            except TypeError as e:
-                logger.error(e)
-    return results
+                entry = next(entries)
+                songs.append(Song.from_entry(entry))
+            except StopIteration:
+                break
+    return songs
+
+
+def search_songs_from_youtube(query: str) -> list[Song]:
+    '''
+    Note
+    ----
+    Make sure to handle error. This function intentionally does not take
+    care of key errors.
+    '''
+    secret = load_secret()
+    max_results = secret["max_results"]
+    options = quiet_options if secret["quiet_ytdl"] else None
+    logger.info("Searching song from youtube...")
+    url = f"ytsearch{max_results}:{query}"
+    results = YoutubeDL(options).extract_info(url, download=False, process=False)
+    logger.info("Done.")
+    songs = []
+    for entry in results["entries"]:
+        songs.append(Song.from_entry(entry))
+    return songs
+
+
+def search_songs(query: str) -> list[Song] | None:
+    '''
+    Description
+    -----------
+    General purpose function for searching songs from youtube.
+    Returns None if url could not be parsed by ytdl.
+    '''
+    urltype = analyze_url(query)
+    if urltype in (URLtype.YT_WATCH, URLtype.YT_PLAYLIST):
+        return get_songs_from_youtube(query)
+    elif urltype == URLtype.NOT_URL:
+        return search_songs_from_youtube(query)
+    return None
 
 
 def download_song(song: Song) -> bool:
+    secret = load_secret()
     # if song is None
     if Song is None:
         return False
@@ -90,7 +143,11 @@ def download_song(song: Song) -> bool:
         logger.warning(f"Already downloaded: {song.path}")
         return True
     # download
-    YoutubeDL(ytdl_options).download(song.url)
+    options = get_download_options()
+    options = options.update(quiet_options if secret["quiet_ytdl"] else {})
+    logger.info("Downloading song...")
+    YoutubeDL(options).download(song.url)
+    logger.info("Done.")
     return True
 
 

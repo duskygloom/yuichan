@@ -1,3 +1,5 @@
+import asyncio
+
 from functools import partial
 from discord.ext import commands
 
@@ -16,133 +18,104 @@ class Music(commands.Cog):
     def __init__(self, bot: VoiceBot):
         self.bot = bot
 
-    async def _enqueue(self, ctx: commands.Context, song: str) -> Player | None:
+    async def _play_current(self, ctx: commands.Context):
+        '''
+        Note
+        ----
+        Ensure player exists for guild.
+        '''
         secret = load_secret()
-        # check if personal command
-        if not ctx.guild:
-            await ctx.reply(messages.guild_only_command)
-            return None
-        # check if connected to voice channel
-        if self.bot.voice_protocol.get(ctx.guild) is None:
-            await ctx.reply(messages.not_in_voice_channel)
-            return None
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await self.bot.create_player(ctx.guild)
-            player = self.bot.players[ctx.guild]
-        # add to playlist
-        await ctx.message.add_reaction(secret["emojis"]["search"])
-        songs: list[Song] = await self.bot.loop.run_in_executor(None, partial(search_songs, song))
-        player.add_to_queue(songs)
-        player.current = len(player.queue) - len(songs)
-        await ctx.message.remove_reaction(secret["emojis"]["search"], self.bot.user)
-        return player
+        player = self.bot.players[ctx.guild]
+        # download song
+        await ctx.message.add_reaction(secret["emojis"]["download"])
+        await self.bot.loop.run_in_executor(None, partial(download_song, player.get_current()))
+        await ctx.message.remove_reaction(secret["emojis"]["downlaod"], self.bot.user)
+        # play song
+        status = player.play()
+        if status == PlayStatus.OK:
+            if player.client.is_playing():
+                player.client.pause()
+            player.client.play(player.source)
+            await ctx.reply(f"Playing {player.get_current()}.")
+            # play again after song has finished playing
+            while player.client.is_playing():
+                await asyncio.sleep(1)
+            await self._play_current(ctx)
+        elif status == PlayStatus.EMPTY_QUEUE:
+            await ctx.reply(messages.empty_queue)
+        elif status == PlayStatus.NO_NEXT_SONG:
+            await ctx.reply(messages.no_next_song)
+        elif status == PlayStatus.NO_SONG_FOUND:
+            await ctx.reply(messages.no_song_found)
 
     @commands.command(
         name="play",
-        brief="Yui plays the song you request."
+        brief="Yui plays the specified song(s)."
     )
-    async def play(self, ctx: commands.Context, song: str):
-        player = await self._enqueue(ctx, song)
-        if not player:
+    async def _play(self, ctx: commands.Context, query: str):
+        # if player not created
+        if not self.bot.players.get(ctx.guild):
+            await ctx.reply(messages.not_in_voice_channel)
             return
-        # if another song playing
-        if player.client.is_playing():
-            player.client.pause()
-        # play
-        player.is_playing = True
-        while player.is_playing:
-            await player.play(ctx)
-    
+        # search songs
+        secret = load_secret()
+        await ctx.message.add_reaction(secret["emojis"]["search"])
+        songs: list[Song] = await self.bot.loop.run_in_executor(None, partial(search_songs, query))
+        await ctx.message.remove_reaction(secret["emojis"]["search"], self.bot.user)
+        self.bot.players[ctx.guild].insert(songs)
+        await ctx.reply(f"Added {len(songs)} songs.")
+        # play current song
+        await self._play_current()
+        
+
     @commands.command(
         name="enqueue",
-        brief="Yui adds the song you request to queue."
+        brief="Yui adds the specified song(s) to the queue."
     )
-    async def enqueue(self, ctx: commands.Context, song: str):
-        await self._enqueue(ctx, song)
+    async def _enqueue(self, ctx: commands.Context, query: str):
+        ...
+
+    @commands.command(
+        name="stop",
+        brief="Yui stops playing songs."
+    )
+    async def _stop(self, ctx: commands.Context):
+        ...
 
     @commands.command(
         name="pause",
         brief="Yui pauses the currently playing song."
     )
-    async def pause(self, ctx: commands.Context):
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await ctx.reply(messages.no_player_found)
-            return
-        # if paused
-        if player.client.is_paused():
-            await ctx.reply(messages.player_already_paused)
-            return
-        # pause
-        player.client.pause()
-    
+    async def _pause(self, ctx: commands.Context):
+        ...
+
     @commands.command(
         name="resume",
         brief="Yui resumes the currently paused song."
     )
-    async def pause(self, ctx: commands.Context):
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await ctx.reply(messages.no_player_found)
-            return
-        # if playing
-        if player.client.is_playing():
-            await ctx.reply(messages.player_not_paused)
-            return
-        # pause
-        player.client.resume()
+    async def _resume(self, ctx: commands.Context):
+        ...
 
     @commands.command(
         name="next",
-        brief="Yui plays the next song in the queue."
+        brief="Yui plays the next song."
     )
-    async def next(self, ctx: commands.Context):
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await ctx.reply(messages.no_player_found)
-            return
-        # if playing
-        if player.client.is_playing():
-            player.pause()
-        # play next
-        player.go_next()
-        await player.play(ctx)
-    
-    @commands.command(
-        name="prev",
-        brief="Yui plays the previous song in the queue."
-    )
-    async def prev(self, ctx: commands.Context):
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await ctx.reply(messages.no_player_found)
-            return
-        # if playing
-        if player.client.is_playing():
-            player.pause()
-        # play prev
-        player.go_prev()
-        await player.play(ctx)
+    async def _next(self, ctx: commands.Context):
+        ...
 
     @commands.command(
-        name="queue",
-        brief="Yui shows the list of songs in the queue."
+        name="prev",
+        brief="Yui plays the previous song."
     )
-    async def queue(self, ctx: commands.Context):
-        # obtain player
-        player = self.bot.players.get(ctx.guild)
-        if not player:
-            await ctx.reply(messages.no_player_found)
-            return
-        # message
-        message = '\n'.join([f"**{song.title}** [*{song.artist}*]" for song in player.queue])
-        await ctx.reply(message)
+    async def _prev(self, ctx: commands.Context):
+        ...
+
+    @commands.command(
+        name="jump",
+        brief="Yui jumps to the specified song."
+    )
+    async def _jump(self, ctx: commands.Context, index: int):
+        ...
 
 
 async def setup(bot: VoiceBot):

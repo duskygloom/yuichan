@@ -1,6 +1,7 @@
 import cli
 import importlib
 
+from typing import Coroutine
 from discord.ext import commands
 
 from utils import messages
@@ -17,7 +18,7 @@ class Developer(commands.Cog):
         self.bot = bot
 
     @staticmethod
-    async def check_developer(ctx: commands.Context) -> bool:
+    async def check_developer(ctx: commands.Context) -> Coroutine[None, None, bool]:
         secret = load_secret()
         is_developer = str(ctx.author.id) in secret["developers"]
         if not is_developer:

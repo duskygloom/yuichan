@@ -3,6 +3,7 @@ from typing import Optional
 from utils import messages
 from utils.bot import *
 from utils.logger import *
+from utils.player import *
 
 from discord import VoiceChannel
 from discord.ext import commands
@@ -22,32 +23,31 @@ class General(commands.Cog):
         '''
         Description
         -----------
-        If `voice_channel` is specified, yuichan tries to enter the channel (author 
+        If `voice_channel` is specified, Yui tries to enter the channel (author 
         must be part of the guild and must have permissions to enter voice channels),
         else tries to join the voice channel of the author.
         '''
+        # check guild
         if ctx.guild is None:
             await ctx.reply(messages.guild_only_command)
             return
+        # check voice permission
         if not ctx.author.guild_permissions.connect:
             await ctx.reply(messages.missing_permissions.format("connect"))
             return
-        if not voice_channel:
-            if not ctx.author.voice:
-                await ctx.reply(messages.user_not_in_voice_channel)
-                return
-            voice_channel = ctx.author.voice.channel
-        if voice_channel not in ctx.guild.voice_channels:
+        # connect
+        status: VoiceConnectionStatus = await self.bot.connect_voice(ctx.guild, voice_channel)
+        # if connected successfully
+        if status == VoiceConnectionStatus.OK:
+            await ctx.reply(messages.joined_voice_channel)
+            client = self.bot.get_voice_client(ctx.guild)
+            logger.info(f"Joined: {ctx.guild.name}/{client.channel.name}")
+        # if already connected to a voice channel
+        elif status == VoiceConnectionStatus.ALREADY_CONNECTED:
+            await ctx.reply(messages.already_in_a_voice_channel)
+        # if voice channel is not in guild
+        elif status == VoiceConnectionStatus.NOT_IN_GUILD:
             await ctx.reply(messages.voice_channel_not_found)
-            return
-        for vc in self.bot.voice_clients:
-            if vc.channel == voice_channel:
-                await ctx.reply(messages.already_in_voice_channel)
-                return
-            if vc.channel in ctx.guild.voice_channels:
-                await ctx.reply(messages.present_in_voice_channel)
-                return
-        self.bot.voice_protocol[ctx.guild] = await voice_channel.connect()
 
     @commands.command(
         name="leave",
@@ -57,32 +57,24 @@ class General(commands.Cog):
         '''
         Description
         -----------
-        Attemps to leave voice channel stored in `bot.voice_protocol`.
-        If unsuccessful, attemps to leave from any voice channel bot
-        is connected to in the guild.
+        Leave the stored voice channel. If no voice channel is stored leave
+        from any voice channel the bot is connected to in the guild.
         '''
+        # check guild
         if ctx.guild is None:
             await ctx.reply(messages.guild_only_command)
             return
-        voice_protocol = self.bot.voice_protocol.get(ctx.guild)
-        if not voice_protocol:
-            await ctx.reply(messages.not_in_voice_channel)
-            return
+        # check voice permission
         if not ctx.author.guild_permissions.connect:
             await ctx.reply(messages.missing_permissions.format("connect"))
             return
-        if self.bot.is_connected(ctx.guild):
-            await self.bot.leave_voice_channel(voice_protocol, ctx.guild)
-            logger.info(f"Left voice channel in guild: {ctx.guild.name}")
-            self.bot.voice_protocol.pop(ctx.guild, None)
+        # disconnect
+        status: bool = await self.bot.disconnect_voice(ctx.guild)
+        if status:
             await ctx.reply(messages.left_voice_channel)
-            return
-        for vc in self.bot.voice_clients:
-            if vc.channel in ctx.guild.voice_channels:
-                self.bot.leave_voice_channel(vc, ctx.guild)
-                logger.info(f"Left voice channel in guild: {ctx.guild.name}")
-                await ctx.reply(messages.left_voice_channel)
-                return
+            logger.info(f"Left voice channel in guild: {ctx.guild.name}")
+        else:
+            await ctx.reply(messages.not_in_voice_channel)
 
 
 async def setup(bot: VoiceBot):
