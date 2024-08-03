@@ -35,6 +35,9 @@ class General(commands.Cog):
         if not ctx.author.guild_permissions.connect:
             await ctx.reply(messages.missing_permissions.format("connect"))
             return
+        # if voice_channel is not specified
+        if not voice_channel and ctx.author.voice:
+            voice_channel = ctx.author.voice.channel
         # connect
         status: VoiceConnectionStatus = await self.bot.connect_voice(ctx.guild, voice_channel)
         # if connected successfully

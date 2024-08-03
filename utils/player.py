@@ -1,12 +1,9 @@
 import random
 
 from enum import Enum
-from typing import Callable
 from discord import VoiceClient
 from discord import FFmpegPCMAudio
 from discord import PCMVolumeTransformer
-from functools import partial
-from discord.ext import commands
 
 from utils.song import *
 from utils.secret import *
@@ -86,7 +83,7 @@ class Player:
     def insert(self, songs: list[Song]):
         if not hasattr(self, "current") and len(songs) > 0:
             self.current = 0
-            self.append(songs)
+            self.queue.extend(songs)
             return
         self.queue = self.queue[ : self.current] + songs + self.queue[self.current : ]
     
@@ -99,9 +96,7 @@ class Player:
         # if queue empty
         if len(self.queue) == 0:
             return PlayStatus.EMPTY_QUEUE
-        # if no next song
-        if self._next() == False:
-            return PlayStatus.NO_NEXT_SONG
+        
         # if song is not found
         if self.queue[self.current].exists() == False:
             return PlayStatus.NO_SONG_FOUND
@@ -109,8 +104,14 @@ class Player:
         self.source = PCMVolumeTransformer(FFmpegPCMAudio(self.queue[self.current].path), volume=self.volume/100)
         return PlayStatus.OK
     
+    def after_play(self):
+        self._next()
+        self.source = None
+    
     def stop(self):
         delattr(self, "current")
+        self.queue.clear()
+        self.source = None
     
     def get_current(self) -> Song | None:
         if not hasattr(self, "current"):

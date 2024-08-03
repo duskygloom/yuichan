@@ -18,20 +18,18 @@ class Music(commands.Cog):
     def __init__(self, bot: VoiceBot):
         self.bot = bot
 
-    async def _play_current(self, ctx: commands.Context):
-        '''
-        Note
-        ----
-        Ensure player exists for guild.
-        '''
+    async def _play_current(self, ctx: commands.Context, next: bool = True):
         secret = load_secret()
-        player = self.bot.players[ctx.guild]
+        player = self.bot.players.get(ctx.guild)
+        if not player:
+            return
         # download song
         await ctx.message.add_reaction(secret["emojis"]["download"])
+        await self.bot.loop.run_in_executor(None, clear_downloads)
         await self.bot.loop.run_in_executor(None, partial(download_song, player.get_current()))
-        await ctx.message.remove_reaction(secret["emojis"]["downlaod"], self.bot.user)
+        await ctx.message.remove_reaction(secret["emojis"]["download"], self.bot.user)
         # play song
-        status = player.play()
+        status = player.play(next=next)
         if status == PlayStatus.OK:
             if player.client.is_playing():
                 player.client.pause()
@@ -40,7 +38,9 @@ class Music(commands.Cog):
             # play again after song has finished playing
             while player.client.is_playing():
                 await asyncio.sleep(1)
-            await self._play_current(ctx)
+            print("Finished playing.")
+            if not player.client():
+                await self._play_current(ctx)
         elif status == PlayStatus.EMPTY_QUEUE:
             await ctx.reply(messages.empty_queue)
         elif status == PlayStatus.NO_NEXT_SONG:
@@ -63,9 +63,9 @@ class Music(commands.Cog):
         songs: list[Song] = await self.bot.loop.run_in_executor(None, partial(search_songs, query))
         await ctx.message.remove_reaction(secret["emojis"]["search"], self.bot.user)
         self.bot.players[ctx.guild].insert(songs)
-        await ctx.reply(f"Added {len(songs)} songs.")
+        await ctx.reply(f"Added {len(songs)} song(s).")
         # play current song
-        await self._play_current()
+        await self._play_current(ctx, next=False)
         
 
     @commands.command(
@@ -73,14 +73,35 @@ class Music(commands.Cog):
         brief="Yui adds the specified song(s) to the queue."
     )
     async def _enqueue(self, ctx: commands.Context, query: str):
-        ...
+        # if player not created
+        if not self.bot.players.get(ctx.guild):
+            await ctx.reply(messages.not_in_voice_channel)
+            return
+        # search songs
+        secret = load_secret()
+        await ctx.message.add_reaction(secret["emojis"]["search"])
+        songs: list[Song] = await self.bot.loop.run_in_executor(None, partial(search_songs, query))
+        await ctx.message.remove_reaction(secret["emojis"]["search"], self.bot.user)
+        self.bot.players[ctx.guild].append(songs)
+        await ctx.reply(f"Enqueued {len(songs)} song(s).")
+
+    @commands.command(
+        name="queue",
+        brief="Yui sends the list of songs in queue."
+    )
+    async def _queue(self, ctx: commands.Context):
+        player = self.bot.players.get(ctx.guild)
+        if not player:
+            await ctx.reply(messages.not_in_voice_channel)
+            return
+        await ctx.reply('\n'.join([song.__str__() for song in player.queue]))
 
     @commands.command(
         name="stop",
         brief="Yui stops playing songs."
     )
     async def _stop(self, ctx: commands.Context):
-        ...
+        
 
     @commands.command(
         name="pause",

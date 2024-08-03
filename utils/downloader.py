@@ -11,10 +11,16 @@ from utils.secret import *
 
 logger = get_logger(__name__)
 
-quiet_options = {
-    "quiet": True,
-    "no_warnings": True
-}
+
+def get_quiet_options(forced: bool = False) -> dict:
+    secret = load_secret()
+    quiet_options = {
+        "quiet": True,
+        "no_warnings": True
+    }
+    if secret["quiet_ytdl"] or forced:
+        return quiet_options
+    return {}
 
 
 def get_download_options() -> dict:
@@ -55,7 +61,7 @@ def analyze_url(url: str) -> URLtype:
         return URLtype.NOT_URL
     try:
         logger.info("Analyzing URL...")
-        info = YoutubeDL(quiet_options).extract_info(url, download=False, process=False)
+        info = YoutubeDL(get_quiet_options(True)).extract_info(url, download=False, process=False)
         logger.info("Done.")
         basename = info.get("webpage_url_basename")
         if basename == "watch":
@@ -75,8 +81,7 @@ def get_songs_from_youtube(url: str) -> list[Song]:
     Make sure to handle error. This function intentionally does not take
     care of key errors.
     '''
-    secret = load_secret()
-    options = quiet_options if secret["quiet_ytdl"] else None
+    options = get_quiet_options()
     logger.info("Getting song from youtube...")
     info = YoutubeDL(options).extract_info(url, download=False, process=False)
     logger.info("Done.")
@@ -104,7 +109,7 @@ def search_songs_from_youtube(query: str) -> list[Song]:
     '''
     secret = load_secret()
     max_results = secret["max_results"]
-    options = quiet_options if secret["quiet_ytdl"] else None
+    options = get_quiet_options()
     logger.info("Searching song from youtube...")
     url = f"ytsearch{max_results}:{query}"
     results = YoutubeDL(options).extract_info(url, download=False, process=False)
@@ -144,7 +149,7 @@ def download_song(song: Song) -> bool:
         return True
     # download
     options = get_download_options()
-    options = options.update(quiet_options if secret["quiet_ytdl"] else {})
+    options.update(get_quiet_options())
     logger.info("Downloading song...")
     YoutubeDL(options).download(song.url)
     logger.info("Done.")

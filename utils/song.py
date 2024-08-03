@@ -29,11 +29,11 @@ class Song:
     def path(self):
         if hasattr(self, "_path"):
             return self._path
-        return os.join(secret["download_path"], f"{self.id}.{secret['extension']}")
+        return os.path.join(secret["download_path"], f"{self.id}.{secret['extension']}")
     
     @path.setter
-    def path(self, filepath: str):
-        self._path = filepath
+    def path(self, value: str):
+        self._path = value
     
     @property
     def thumbnail(self):
@@ -42,8 +42,8 @@ class Song:
         return f"https://i.ytimg.com/vi/{self.id}/hqdefault.jpg"
     
     @thumbnail.setter
-    def thumbnail(self, fileurl: str):
-        self._thumbnail = fileurl
+    def thumbnail(self, value: str):
+        self._thumbnail = value
     
     def __str__(self) -> str:
         secret = load_secret()
